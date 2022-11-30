@@ -1,0 +1,52 @@
+#+title: GNU Emacs literate configuration
+#+author: teatkin
+#+date: 2022-11-30
+
+* GNU Emacs Literate Configuration
+** Acknowledgements
+Significant thanks have to go to [[https://github.com/sewh/][sewh]] for introducing me to the true power beyond just being a simple text editor
+that Emacs holds (and that's coming from a reformed vim neophyte), for answering all of the stupid emacs-related
+(and not emacs-related!) questions I've had and for the inspiration (or straight up theft of) large portions of his
+fantastic [[https://github.com/sewh/emacs-literate-config][literate emacs configuration]] have provided me.
+
+* Reload helper
+This config will change a lot, so it's helpful to have a nice shortcut to reload the config without having to go
+through the usual effort of =M-x load-file ~/.emacs.d/init.el=
+#+begin_src emacs-lisp
+  (defun reload-config ()
+    "Reloads this document to evaluate new configuration changes"
+    (interactive)
+    (org-babel-load-file (concat user-emacs-directory "configuration.org")))
+#+end_src
+
+* Package Management
+** Package Repositories
+The default [[https://elpa.gnu.org][GNU ELPA]] (Emacs Lisp Package Archive) is fairly light on useful packages, mainly due to the requirements
+put on package developers by the Free Software Foundation and the GNU Emacs maintainers to allow new packages to be
+added. On the other hand, [[https://melpa.org][MELPA]] (Milkypostman's Emacs Lisp Package Archive) is much easier for package developers
+to get their packages added to, so we'll add that repository to give us a much wider range of packages available to us.
+#+begin_src emacs-lisp
+  (require 'package)
+  (add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+  (package-initialize)
+#+end_src
+
+** Installing use-package
+=use-package= is a really neat little helper that allows us to define packages we want to install, hooks, bindings and
+much more all within one function. If it's not installed, we want to install it:
+#+begin_src emacs-lisp
+  (unless (require 'use-package nil 'noerror)
+    (package-refresh-contents)
+    (package-install 'use-package))
+#+end_src
+
+* macOS specific changes
+** Hash key
+For some reason Apple, in their infinite wisdom, decided that, despite the existence of the ISO GB keyboard standard,
+they knew better so UK MacBook users are forced to endure Apple's utterly stupid decision to mash together the ANSI
+keyboard layout and the ISO GB keyboard layout which makes the hash key unaccessable as it is entered by pressing
+Option-3 on a MacBook keyboard, which Emacs does not like, so we bind it to another keychord instead
+#+begin_src emacs-lisp
+  (global-set-key (kbd "C-c 3") (lambda () (interactive) (insert "#")))
+#+end_src
+

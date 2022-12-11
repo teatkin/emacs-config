@@ -40,13 +40,285 @@ much more all within one function. If it's not installed, we want to install it:
     (package-install 'use-package))
 #+end_src
 
+** Auto update packages
+This isn't native emacs functionality, but we can add it with a package
+#+begin_src emacs-lisp
+  (use-package auto-package-update
+    :ensure t)
+#+end_src
+
+* Emacs Lisp helpers
+=chomp= deletes whitespace from the beginning and end of a string
+#+begin_src emacs-lisp
+  (defun chomp (str)
+    "Chomp leading and trailing whitespace from STR."
+    (while (string-match "\\`\n+\\|^\\s-+\\|\\s-+$\\|\n+\\'"
+			 str)
+      (setq str (replace-match "" t t str)))
+    str)
+#+end_src
+
+* Appearance
+** Setting the font
+My current preferred font is Fira Code, and size 11 is my current preferred size
+#+begin_src emacs-lisp
+  (setq default-frame-alist '((font . "Fira Code-11")))
+#+end_src
+
+** Theme
+I prefer a dark theme, and my preferred theme is the Gruvbox dark theme that is part of the base16 theme pack
+#+begin_src emacs-lisp
+  (use-package base16-theme
+    :ensure t)
+  (load-theme 'base16-gruvbox-dark-hard t)
+#+end_src
+
+** Remove UI features
+I don't like the scrollbar and the toolbar, so let's get rid of them
+#+begin_src emacs-lisp
+  (when (display-graphic-p)
+    (tool-bar-mode -1)
+    (scroll-bar-mode -1))
+#+end_src
+
+The menu bar is useful on GUI systems, but it's pointless on console systems
+#+begin_src emacs-lisp
+  (unless (display-graphic-p)
+    (menu-bar-mode -1))
+#+end_src
+
+** System Bell
+Who wants the bell to ding all the time? Not me, that's for certain
+#+begin_src emacs-lisp
+  (setq ring-bell-function 'ignore)
+#+end_src
+
+* Movement
+** Better window movement
+The default emacs controls are pretty uncomfortable, so allow using arrow keys instead
+#+begin_src emacs-lisp
+  (windmove-default-keybindings 'meta)
+#+end_src
+
+* Emacs internals
+** Custom file
+Emacs stores some of the config set via the UI in the =.emacs= file, which overrides this config file so we instead
+tell emacs where to store the custom configuration.
+#+begin_src emacs-lisp
+  (setq custom-file (concat user-emacs-directory "custom.el"))
+  (when (file-exists-p custom-file)
+    (load-file custom-file))
+#+end_src
+
+** Backup files
+Emacs creates files in the current directory, which makes a real mess of the files and confuses the hell out of git,
+so move them to a directory under =~/.emacs.d=
+#+begin_src emacs-lisp
+  (setq backup-directory (concat user-emacs-directory "backups"))
+
+  (unless (file-directory-p backup-directory)
+    (mkdir backup-directory))
+
+  (setq backup-directory-alist
+	`((".*" . ,backup-directory)))
+#+end_src
+
 * macOS specific changes
 ** Hash key
 For some reason Apple, in their infinite wisdom, decided that, despite the existence of the ISO GB keyboard standard,
 they knew better so UK MacBook users are forced to endure Apple's utterly stupid decision to mash together the ANSI
-keyboard layout and the ISO GB keyboard layout which makes the hash key unaccessable as it is entered by pressing
+keyboard layout and the ISO GB keyboard layout which makes the hash key inaccessable as it is entered by pressing
 Option-3 on a MacBook keyboard, which Emacs does not like, so we bind it to another keychord instead
 #+begin_src emacs-lisp
   (global-set-key (kbd "C-c 3") (lambda () (interactive) (insert "#")))
 #+end_src
 
+* Git
+Magit is a truly amazing productivity tool that revolutionises use of emacs
+#+begin_src emacs-lisp
+  (use-package magit
+    :ensure t
+    :bind (("C-x g" . magit-status)
+	   ("C-x C-g" . magit-status)))
+#+end_src
+
+* Languages
+** Basic language options
+*** Line Numbers
+There are certain modes, primarily programming modes, are best for enabling line numbers, so we only enable them in
+those modes
+#+begin_src emacs-lisp
+  (add-hook 'prog-mode-hook #'display-line-numbers-mode)
+#+end_src
+
+*** Column numbers
+I like to be able to see what column I'm at to ensure I don't exceed a sensible limit (generally 120 unless standards
+say otherwise)
+#+begin_src emacs-lisp
+(setq column-number-mode t)
+#+end_src
+
+*** Automatic parenthesis
+#+begin_src emacs-lisp
+  (use-package smartparens
+    :ensure t
+    :init
+    (require 'smartparens-config)
+    (smartparens-global-mode))
+#+end_src
+
+*** Spell checking
+Emacs has a built in, live, spellchecker called Flyspell. We use flyspell for org mode configuration later on, so we need to
+make sure it’s configured to use an English (GB) dictionary:
+#+begin_src emacs-lisp
+  (setq ispell-dictionary "british")
+#+end_src
+
+*** Ivy
+
+#+begin_src emacs-lisp
+(use-package ivy
+  :ensure t
+  :init
+  (ivy-mode 1)
+  (setq ivy-use-virtual-buffers t)
+  (setq enable-recursive-minibuffers t))
+#+end_src
+
+#+begin_src emacs-lisp
+(use-package swiper
+  :ensure t
+  :bind (("C-s" . swiper)))
+#+end_src
+
+*** Company mode
+Company mode is a completion framework. LSP will use company to do inline completions.
+#+begin_src emacs-lisp
+	(use-package company
+	  :ensure t
+	  :config
+	  (setq company-dabbrev-downcase 0)
+	  (setq company-idle-delay 0))
+#+end_src
+
+*** eglot
+eglot is an LSP package for emacs. We use it for autocomplete and other fancy features. eglot will be baked into emacs 29 so it
+makes sense to start using it as a package now.
+#+begin_src emacs-lisp
+  (use-package eglot
+    :ensure t)
+#+end_src
+
+*** Rust
+#+begin_src emacs-lisp
+  (defun find-rust-analyzer-directory ()
+    "Run rustup to discover rust-analyzer path"
+    (let* ((output (chomp (shell-command-to-string "rustup which --toolchain stable rust-analyzer"))))
+      (if (string-match-p "not found" output)
+	  nil
+	(file-name-directory output))))
+
+  (defun add-rust-analyzer-to-path ()
+    "Add the parent directory of rust-analyzer to the PATH variable and Emacs' exec-path"
+    (let* ((ra-dir (find-rust-analyzer-directory)))
+
+      ; first update the path
+      (when (and ra-dir (not (string-match-p ra-dir (getenv "PATH")))) ; we found the ra dir and the ra dir not in PATH
+	(setenv "PATH"
+		(concat ra-dir ":" (getenv "PATH"))))
+      ; now update the exec-path
+      (when (and ra-dir (not (member ra-dir exec-path)))
+	(add-to-list 'exec-path ra-dir))))
+  (use-package rustic
+    :ensure t
+    :hook ((rustic-mode . company-mode))
+    :init (add-rust-analyzer-to-path)
+    :config
+    (setq
+     ;; eglot seems to be the best option going forward
+     rustic-lsp-client 'eglot
+     rustic-format-on-save nil
+     ;; prevent automatic syntax checking, which was causing lags and stutters.
+     eglot-send-changes-idle-time (* 60 60)
+     )
+    ;; disable the annoying doc popups in the minibuffer
+    (add-hook 'eglot-managed-mode-hook (lambda () (eldoc-mode 1)))
+    )
+#+end_src
+
+**** Pest mode
+I use [[https://pest.rs][Pest]] for building parsers in rust, this mode allows a lot of very cool features, including inline verification of
+grammar files in its own buffer
+
+#+begin_src emacs-lisp
+  (use-package pest-mode
+    :ensure t
+    :mode "\\.pest\\'"
+    :hook (pest-mode . flymake-mode))
+#+end_src
+
+*** Flycheck
+Flycheck is an error checking framework for Emacs. It's useful for getting feedback on errors when writing code
+#+begin_src emacs-lisp
+  (use-package flycheck
+    :ensure t)
+#+end_src
+
+*** TOML
+#+begin_src emacs-lisp
+(add-hook 'conf-toml-mode-hook (lambda () (setq tab-width 4)))
+#+end_src
+
+*** LaTeX
+I use LaTeX for writing documents, especially documents with a heavy mathematics bent so this sets up Emacs to work
+nicely with LaTeX
+#+begin_src emacs-lisp
+  (use-package auctex
+    :ensure t)
+
+  (setq TeX-auto-save t)
+  (setq TeX-parse-self t)
+
+  (use-package pdf-tools
+    :ensure t)
+  (pdf-loader-install)
+  (add-hook 'TeX-after-compilation-finished-functions #'TeX-revert-document-buffer)
+#+end_src
+
+** C
+*** Tab width
+I want a tab to be set to 4 spaces wide
+#+begin_src emacs-lisp
+  (setq-default c-basic-offset 4)
+#+end_src
+
+*** Bracket indenting
+Emacs follows the godawful GNU style of indending who think that this is how a function should look:
+#+begin_src c
+  int foo(int arg)
+    {
+      int x = arg + 2;
+      return arg;
+    }
+#+end_src
+
+Barf. That is hoorible. The linux style is much nicer, so let's use that instead
+#+begin_src emacs-lisp
+    (setq c-default-style "linux")
+#+end_src
+
+*** Doxygen style comments
+I like the doxygen style of comments for documentation, so I want emacs to render them correctly
+#+begin_src emacs-lisp
+  (setq c-doc-comment-style '((c-mode . doxygen)
+			      (c++-mode . doxygen)))
+#+end_src
+
+** Meson
+I'm going to give meson a try as it seems like a reasonable compromise between modernity and simplicity that both
+CMake and Make fail to deliver on.
+#+begin_src emacs-lisp
+  (use-package meson-mode
+    :ensure t
+    :hook (meson-mode-hook . company-mode))
+#+end_src

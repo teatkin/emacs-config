@@ -142,6 +142,22 @@ Magit is a truly amazing productivity tool that revolutionises use of emacs
 	   ("C-x C-g" . magit-status)))
 #+end_src
 
+* Shells
+I need a better shell than eshell. The =vterm= package does this very well, as it used =libvterm=, which makes it very
+performant, basically the same as your native shell. I also want to be able to open a new window with a vterm shell in
+it with one key chord, so we need to define a function to open this new window.
+#+begin_src emacs-lisp
+  (add-to-list 'display-buffer-alist
+	       '("*vterm*"
+		 (display-buffer-in-side-window)
+		 (window-height . 0.25)
+		 (side . bottom)
+		 (slot . 0)))
+  (use-package vterm
+    :ensure t
+    :bind ("C-`" . vterm))
+#+end_src
+
 * Languages
 ** Basic language options
 *** Line Numbers
@@ -269,22 +285,6 @@ Flycheck is an error checking framework for Emacs. It's useful for getting feedb
 (add-hook 'conf-toml-mode-hook (lambda () (setq tab-width 4)))
 #+end_src
 
-*** LaTeX
-I use LaTeX for writing documents, especially documents with a heavy mathematics bent so this sets up Emacs to work
-nicely with LaTeX
-#+begin_src emacs-lisp
-  (use-package auctex
-    :ensure t)
-
-  (setq TeX-auto-save t)
-  (setq TeX-parse-self t)
-
-  (use-package pdf-tools
-    :ensure t)
-  (pdf-loader-install)
-  (add-hook 'TeX-after-compilation-finished-functions #'TeX-revert-document-buffer)
-#+end_src
-
 ** C
 *** Tab width
 I want a tab to be set to 4 spaces wide
@@ -321,4 +321,12 @@ CMake and Make fail to deliver on.
   (use-package meson-mode
     :ensure t
     :hook (meson-mode-hook . company-mode))
+#+end_src
+
+** Haskell
+I've started working with [[https://clash-lang.org][Clash Lang]], which is a Hardware Description Language that uses Haskell for the underlying
+language
+#+begin_src emacs-lisp
+  (use-package haskell-mode
+    :ensure t)
 #+end_src
